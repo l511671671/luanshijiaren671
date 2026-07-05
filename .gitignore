@@ -1,0 +1,19 @@
+# WorkBuddy runtime / app data
+app/
+app-cache/
+sessions/
+logs/
+traces/
+workspace/
+blobs/
+*.db
+*.db-shm
+*.db-wal
+*.json.bak*
+__pycache__/
+*.pyc
+automation-backups/
+
+# OS files
+.DS_Store
+Thumbs.db
