@@ -25,6 +25,8 @@ sys.path.insert(0, str(WORKBUDDY_DIR))
 
 from agents.registry import AgentRegistry  # noqa: E402
 from router.model_router import ModelRouter, ModelConfig  # noqa: E402
+from tracer import Tracer  # noqa: E402
+from usage_tracker import UsageTracker  # noqa: E402
 
 ROUTING_CONFIG_PATH = WORKBUDDY_DIR / "model-routing.json"
 
@@ -34,6 +36,8 @@ class WorkBuddyBrain:
         self.registry = AgentRegistry(str(WORKBUDDY_DIR / "agents"))
         self.router = self._build_router()
         self.routing_config = self._load_routing_config()
+        self.tracer = Tracer()
+        self.usage = UsageTracker()
 
     def _build_router(self):
         models = [
@@ -67,24 +71,28 @@ class WorkBuddyBrain:
 
     def think(self, prompt: str) -> dict:
         """返回任务分析结果，但不执行 CLI。"""
-        # 1. 领域 Agent
-        agents = self.registry.match(prompt, top_k=1)
-        agent_id = agents[0].id if agents else "general"
+        with self.tracer.span("brain.think") as span:
+            # 1. 领域 Agent
+            agents = self.registry.match(prompt, top_k=1)
+            agent_id = agents[0].id if agents else "general"
 
-        # 2. 任务复杂度
-        route = self.router.route(prompt)
-        tier = route.tier.value
-        model_id = self.routing_config["tier_to_model"].get(tier, route.selected.id)
-        fallbacks = self.routing_config["fallback_chain"].get(tier, [])
-        fallbacks = [f for f in fallbacks if f != model_id]
+            # 2. 任务复杂度
+            route = self.router.route(prompt)
+            tier = route.tier.value
+            model_id = self.routing_config["tier_to_model"].get(tier, route.selected.id)
+            fallbacks = self.routing_config["fallback_chain"].get(tier, [])
+            fallbacks = [f for f in fallbacks if f != model_id]
 
-        return {
-            "prompt": prompt,
-            "agent": agent_id,
-            "tier": tier,
-            "model": model_id,
-            "fallback": fallbacks[:1],
-        }
+            plan = {
+                "prompt": prompt,
+                "agent": agent_id,
+                "tier": tier,
+                "model": model_id,
+                "fallback": fallbacks[:1],
+            }
+            self.tracer.log("brain.plan", plan)
+            self.usage.log(model_id, tier, prompt, cost_index=route.selected.cost_index)
+            return plan
 
     def run(self, prompt: str) -> str:
         plan = self.think(prompt)
