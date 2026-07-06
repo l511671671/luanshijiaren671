@@ -1,0 +1,16 @@
+{
+  "comment": "将任务 tier 映射到 WorkBuddy 可用的 model id。可用 id 参考 codebuddy --help 中的 --model 选项。",
+  "tier_to_model": {
+    "tier_1_light": "deepseek-v4-flash",
+    "tier_2_standard": "deepseek-v4-flash",
+    "tier_3_complex": "deepseek-v4-pro",
+    "tier_4_verify": "kimi-k2.7"
+  },
+  "fallback_chain": {
+    "tier_1_light": ["deepseek-v4-flash"],
+    "tier_2_standard": ["deepseek-v4-flash"],
+    "tier_3_complex": ["deepseek-v4-pro", "deepseek-v4-flash"],
+    "tier_4_verify": ["kimi-k2.7", "deepseek-v4-pro"]
+  },
+  "cli_path": "C:\\Program Files\\WorkBuddy\\resources\\app.asar.unpacked\\cli\\bin\\codebuddy"
+}

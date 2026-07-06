@@ -10,9 +10,59 @@ blobs/
 *.db-shm
 *.db-wal
 *.json.bak*
+*.bak
 __pycache__/
 *.pyc
 automation-backups/
+
+# Runtime / state / secrets
+argv.json
+settings.json
+user-state.json
+workspace-state.json
+usage-log.json
+expert-history.json
+ioa-im-override.json
+mcp.json
+.mcp.json
+.connectors-marketplace.meta.json
+.skills-marketplace-version
+mcp-approvals.json
+models.json
+63_pool_*.json
+mem.md
+skills/.neodata_token
+session_fragment_repair_done*
+memory/*_memory.md
+*.backup.*
+
+# Runtime directories
+tasks/
+vendor/
+plugins/
+extensions/
+projects/
+audit-log/
+automations/
+binaries/
+clipboard-images/
+cloudstudio-deploy-history/
+connectors/
+connectors-marketplace/
+skills-marketplace/
+plugin-marketplace-state-new/
+file-history/
+shell-snapshots/
+local_storage/
+artifact-index/
+memery/
+
+# Personal awareness / memory (keep local)
+IDENTITY.md
+MEMORY.md
+USER.md
+SOUL.md
+MODEL-STRATEGY.md
 
 # OS files
 .DS_Store
