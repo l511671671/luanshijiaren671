@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from auto_review import review_text, format_memory_entry
-from multi_agent.debate import DebateOrchestrator, EchoBackend
+from multi_agent.debate import DebateOrchestrator, EchoBackend, CodeBuddyBackend, get_default_backend
 
 
 WORKBUDDY_DIR = Path(__file__).resolve().parent
@@ -68,7 +68,7 @@ def evaluate(prompt: str, output: str, trace: str = "", rounds: int = 1) -> Dict
     review = review_text(full_text)
 
     draft = f"用户请求：{prompt}\n\n系统输出：{output}\n\n执行轨迹：{trace}".strip()
-    orchestrator = DebateOrchestrator(backend=EchoBackend())
+    orchestrator = DebateOrchestrator(backend=get_default_backend())
     debate = orchestrator.run(prompt, draft=draft, rounds=rounds)
 
     scoring = score_output(review, debate)

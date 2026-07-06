@@ -30,13 +30,26 @@ class EchoBackend(LLMBackend):
 class CodeBuddyBackend(LLMBackend):
     """调用 WorkBuddy CLI 的 LLM backend。"""
 
+    DEFAULT_WIN_PATH = r"C:\Program Files\WorkBuddy\resources\app.asar.unpacked\cli\bin\codebuddy"
+
     def __init__(self, model: str = "deepseek-v4-flash", timeout: int = 120):
         self.model = model
         self.timeout = timeout
 
+    def _find_cli(self) -> str:
+        import shutil
+        import sys
+
+        if sys.platform == "win32":
+            # 如果 PATH 中有 codebuddy 则优先使用
+            if shutil.which("codebuddy"):
+                return "codebuddy"
+            return self.DEFAULT_WIN_PATH
+        # 非 Windows 默认 codebuddy
+        return "codebuddy"
+
     def generate(self, prompt: str) -> str:
-        cli = "codebuddy"
-        # Windows 下 codebuddy 是 node 脚本
+        cli = self._find_cli()
         import sys
 
         if sys.platform == "win32" and not cli.endswith(('.exe', '.cmd', '.bat')):

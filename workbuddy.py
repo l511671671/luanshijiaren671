@@ -70,15 +70,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 
 def cmd_improve(args: argparse.Namespace) -> int:
-    import importlib.util
+    from evolve import EvolveRunner
 
-    runner_path = WORKBUDDY_DIR / "self-improving" / "runner.py"
-    spec = importlib.util.spec_from_file_location("self_improving_runner", runner_path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    runner = mod.SelfImprovementRunner()
-    runner.run()
-    return 0
+    report = EvolveRunner().run()
+    print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    return 0 if report["success"] else 1
 
 
 def cmd_test(args: argparse.Namespace) -> int:
