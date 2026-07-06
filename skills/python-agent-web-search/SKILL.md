@@ -8,7 +8,7 @@ agent_created: true
 
 ## Overview
 
-This skill adds real-time web search to a Python agent or chatbot without requiring paid API keys. It supports multiple search backends (DuckDuckGo, Baidu mobile, DuckDuckGo HTML fallback) and automatically decides whether a user query needs fresh internet information before answering.
+This skill adds real-time web search to a Python agent or chatbot without requiring paid API keys. It supports multiple search backends and automatically decides whether a user query needs fresh internet information before answering.
 
 ## When to Use
 
@@ -21,16 +21,18 @@ Use this skill when:
 
 ### 1. Multi-Backend Web Search
 
-Create a `WebSearchTool` class that supports three backends:
+Create a `WebSearchTool` class that supports several backends:
 
-- `duckduckgo`: Uses the `duckduckgo-search` library (free, no API key).
-- `baidu`: Parses `m.baidu.com` search results (useful in Chinese network environments where DuckDuckGo/Bing may be unstable).
+- `bing_cn`: Parses `cn.bing.com` search results. Often the most stable in Chinese network environments.
+- `duckduckgo`: Uses the `duckduckgo-search` library (free, no API key). Best when DuckDuckGo/Bing is reachable.
+- `baidu`: Parses `m.baidu.com` search results. Useful fallback, but may trigger CAPTCHA under heavy use.
 - `duckduckgo_html`: Parses the DuckDuckGo HTML endpoint as a minimal-dependency fallback.
 
 Key implementation points:
 - Use `httpx` for HTTP requests and `BeautifulSoup` for HTML parsing.
-- Auto backend selection: prefer Baidu for Chinese queries and DuckDuckGo for others.
+- Auto backend selection: prefer `bing_cn` for Chinese queries and DuckDuckGo for others.
 - Return structured results with `title`, `href`, and `body` fields.
+- Handle CAPTCHA redirects gracefully by returning empty results so the next backend can be tried.
 
 Example class layout:
 
@@ -43,7 +45,7 @@ class WebSearchTool(BaseTool):
 ### 2. Web Page Fetching
 
 Create a `WebFetchTool` class that:
-- Fetches a URL using `httpx` with a mobile user-agent.
+- Fetches a URL using `httpx` with a desktop user-agent.
 - Removes noise tags (`script`, `style`, `nav`, `header`, `footer`, `aside`, etc.).
 - Extracts main content from semantic tags (`article`, `main`, `[role='main']`, `.content`).
 - Returns cleaned text with title, URL, and optional links.
@@ -76,17 +78,19 @@ Detection keywords should cover:
 
 ### 4. Router Integration
 
-Extend the model router with a `route_with_search()` method:
+Extend the model router with a `route_with_search()` method. The router stores the full config so it can read search settings from `tools.search`:
 
 ```python
 async def route_with_search(self, prompt: str, intent: dict = None) -> tuple[str, str]:
     if self._search_assistant is None:
+        from ..tools.search_integration import WebSearchAssistant
+        search_cfg = self._full_config.get("tools", {}).get("search", {})
         self._search_assistant = WebSearchAssistant(
             model_router=self,
-            max_results=self.config.get("search", {}).get("max_results", 5),
-            auto_fetch=self.config.get("search", {}).get("auto_fetch", True),
-            max_context_chars=self.config.get("search", {}).get("max_context_chars", 6000),
-            backend=self.config.get("search", {}).get("backend", "auto"),
+            max_results=search_cfg.get("max_results", 5),
+            auto_fetch=search_cfg.get("auto_fetch", True),
+            max_context_chars=search_cfg.get("max_context_chars", 6000),
+            backend=search_cfg.get("backend", "auto"),
         )
     return await self._search_assistant.answer(prompt, intent=intent)
 ```
@@ -103,13 +107,13 @@ Keep explicit task commands (`run`, `reason`, `team`, `long`) on the normal engi
 
 ## Configuration
 
-Add a `search` section to the agent config file:
+Add a `search` section under `tools` in the agent config file:
 
 ```yaml
 tools:
   search:
     enabled: true
-    backend: "auto"          # auto | duckduckgo | baidu | duckduckgo_html
+    backend: "auto"          # auto | bing_cn | duckduckgo | baidu | duckduckgo_html
     max_results: 5
     auto_fetch: true         # whether to fetch top result pages
     max_context_chars: 6000  # context window for search results
@@ -133,8 +137,11 @@ Add a verification test that checks:
 - Search result formatting.
 - A live search returns at least one result (with a try/except to skip on network failure).
 
+Prefer using `backend="auto"` in tests so the most available backend for the current network is used automatically.
+
 ## Design Notes
 
 - Do not search for sensitive queries (passwords, keys, IDs, personal privacy).
 - If all backends fail, fall back to the model with a note that search was unavailable.
 - Keep search results concise to avoid exceeding the model's context window.
+- If a backend returns CAPTCHA or a redirect to a verification page, return empty results and let the caller try the next backend.

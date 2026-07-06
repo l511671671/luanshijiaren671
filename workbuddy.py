@@ -117,6 +117,76 @@ def cmd_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    from auto_review import review_text, write_daily_review, format_memory_entry
+
+    if args.transcript:
+        text = Path(args.transcript).read_text(encoding="utf-8", errors="ignore")
+    elif args.file:
+        text = Path(args.file).read_text(encoding="utf-8", errors="ignore")
+    else:
+        text = args.text or ""
+
+    review = review_text(text)
+    if args.write_daily:
+        path = write_daily_review(review)
+        print(f"[WorkBuddy] review written to {path}")
+    if args.memory:
+        print("[WorkBuddy] suggested memory entry:")
+        print(format_memory_entry(review))
+    if not args.write_daily and not args.memory:
+        print(format_memory_entry(review))
+    return 0
+
+
+def cmd_project_info(args: argparse.Namespace) -> int:
+    from project_context import ProjectContext
+
+    ctx = ProjectContext.from_path(args.path)
+    if args.json:
+        print(json.dumps(ctx.summary(), ensure_ascii=False, indent=2))
+    else:
+        print(ctx.to_prompt_context())
+    return 0
+
+
+def cmd_ship(args: argparse.Namespace) -> int:
+    from git_workflow import GitWorkflow, get_project_root
+
+    repo = get_project_root(args.repo)
+    wf = GitWorkflow(repo)
+    result = wf.ship(args.message, run_tests=not args.skip_tests)
+    for step in result.steps:
+        status = "OK" if step["ok"] else "FAIL"
+        print(f"[{status}] {step['name']}")
+        if step["output"]:
+            print(step["output"])
+    return 0 if result.success else 1
+
+
+def cmd_debate(args: argparse.Namespace) -> int:
+    from multi_agent.debate import DebateOrchestrator
+
+    orchestrator = DebateOrchestrator()
+    result = orchestrator.run(args.prompt, draft=args.draft, rounds=args.rounds)
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def cmd_run_connectors(args: argparse.Namespace) -> int:
+    from connectors import ConnectorRunner
+
+    runner = ConnectorRunner(config=args.config or {})
+    names = args.connector if args.connector else (list(runner.REGISTERED.keys()) if args.all else [])
+    if not names:
+        print("[WorkBuddy] 请指定 --connector 或 --all")
+        return 1
+    results = runner.run(names)
+    report = runner.to_report(results)
+    print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    return 0 if report["success"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="workbuddy", description="WorkBuddy 统一入口")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +224,38 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent.add_argument("prompt", help="用户请求")
     p_agent.add_argument("--top-k", type=int, default=1, help="返回 agent 数量")
     p_agent.set_defaults(func=cmd_agent)
+
+    p_review = sub.add_parser("review", help="自动复盘本次会话")
+    group = p_review.add_mutually_exclusive_group()
+    group.add_argument("--transcript", help="会话记录文件路径")
+    group.add_argument("--file", help="任意日志文件路径")
+    group.add_argument("--text", help="会话文本")
+    p_review.add_argument("--write-daily", action="store_true", help="写入 memory/YYYY-MM-DD_review.md")
+    p_review.add_argument("--memory", action="store_true", help="输出建议的 MEMORY.md 条目")
+    p_review.set_defaults(func=cmd_review)
+
+    p_project = sub.add_parser("project-info", help="加载项目上下文")
+    p_project.add_argument("--path", type=Path, default=Path.cwd(), help="起始路径")
+    p_project.add_argument("--json", action="store_true", help="输出 JSON 摘要")
+    p_project.set_defaults(func=cmd_project_info)
+
+    p_ship = sub.add_parser("ship", help="测试 -> 提交 -> 推送")
+    p_ship.add_argument("--repo", type=Path, default=None, help="仓库路径")
+    p_ship.add_argument("--message", default="WorkBuddy auto commit", help="提交信息")
+    p_ship.add_argument("--skip-tests", action="store_true", help="跳过测试")
+    p_ship.set_defaults(func=cmd_ship)
+
+    p_debate = sub.add_parser("debate", help="多 Agent 质量辩论")
+    p_debate.add_argument("prompt", help="待辩论的命题")
+    p_debate.add_argument("--draft", default=None, help="初始方案")
+    p_debate.add_argument("--rounds", type=int, default=1, help="辩论轮数")
+    p_debate.set_defaults(func=cmd_debate)
+
+    p_connectors = sub.add_parser("run-connectors", help="运行外部连接器")
+    p_connectors.add_argument("--connector", action="append", help="指定连接器，可多次使用")
+    p_connectors.add_argument("--all", action="store_true", dest="run_all", help="运行所有连接器")
+    p_connectors.add_argument("--config", type=json.loads, default={}, help="JSON 配置")
+    p_connectors.set_defaults(func=cmd_run_connectors)
 
     return parser
 
