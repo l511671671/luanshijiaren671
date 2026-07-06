@@ -187,6 +187,67 @@ def cmd_run_connectors(args: argparse.Namespace) -> int:
     return 0 if report["success"] else 1
 
 
+def cmd_self_eval(args: argparse.Namespace) -> int:
+    from self_eval import evaluate, write_daily_eval
+
+    result = evaluate(args.prompt, args.output, args.trace, rounds=args.rounds)
+    if args.write_daily:
+        path = write_daily_eval(result)
+        print(f"[WorkBuddy] self-eval written to {path}")
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def cmd_checkpoint_list(args: argparse.Namespace) -> int:
+    from checkpoint_runner import CheckpointRunner
+
+    runner = CheckpointRunner()
+    cps = runner.list_active()
+    for cp in cps:
+        print(f"{cp.task_id}\t{cp.status}\t{cp.task}")
+    return 0
+
+
+def cmd_checkpoint_resume(args: argparse.Namespace) -> int:
+    from checkpoint_runner import CheckpointRunner
+
+    runner = CheckpointRunner()
+    result = runner.resume(args.task_id)
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    return 0 if result["success"] else 1
+
+
+def cmd_checkpoint_create(args: argparse.Namespace) -> int:
+    from checkpoint_runner import CheckpointRunner
+
+    runner = CheckpointRunner()
+    cp = runner.create(args.task, steps=args.steps)
+    print(f"[WorkBuddy] checkpoint created: {cp.task_id}")
+    return 0
+
+
+def cmd_skill(args: argparse.Namespace) -> int:
+    from skill_manager import SkillManager
+
+    manager = SkillManager()
+    if args.skill_command == "list":
+        for skill in manager.list_skills():
+            print(f"{'[E]' if skill.enabled else '[D]'} {skill.name}\n  {skill.description}")
+    elif args.skill_command == "recommend":
+        for skill in manager.recommend(args.task, args.top_k):
+            print(f"- {skill.name}: {skill.description}")
+    elif args.skill_command == "enable":
+        ok = manager.enable(args.name)
+        print(f"{'enabled' if ok else 'not found'} {args.name}")
+    elif args.skill_command == "disable":
+        ok = manager.disable(args.name)
+        print(f"{'disabled' if ok else 'not found'} {args.name}")
+    elif args.skill_command == "prune":
+        for name in manager.prune_candidates(args.days):
+            print(f"prune candidate: {name}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="workbuddy", description="WorkBuddy 统一入口")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -256,6 +317,44 @@ def build_parser() -> argparse.ArgumentParser:
     p_connectors.add_argument("--all", action="store_true", dest="run_all", help="运行所有连接器")
     p_connectors.add_argument("--config", type=json.loads, default={}, help="JSON 配置")
     p_connectors.set_defaults(func=cmd_run_connectors)
+
+    p_self_eval = sub.add_parser("self-eval", help="自动自评任务输出")
+    p_self_eval.add_argument("--prompt", required=True, help="原始用户请求")
+    p_self_eval.add_argument("--output", default="", help="系统输出文本")
+    p_self_eval.add_argument("--trace", default="", help="执行轨迹/日志")
+    p_self_eval.add_argument("--rounds", type=int, default=1, help="辩论轮数")
+    p_self_eval.add_argument("--write-daily", action="store_true", help="写入 memory/YYYY-MM-DD_self_eval.json")
+    p_self_eval.set_defaults(func=cmd_self_eval)
+
+    p_cp = sub.add_parser("checkpoint", help="跨会话任务续跑")
+    cp_sub = p_cp.add_subparsers(dest="cp_command", required=True)
+    p_cp_list = cp_sub.add_parser("list", help="列出活跃 checkpoint")
+    p_cp_list.set_defaults(func=cmd_checkpoint_list)
+    p_cp_resume = cp_sub.add_parser("resume", help="恢复指定 checkpoint")
+    p_cp_resume.add_argument("task_id", help="task_id")
+    p_cp_resume.set_defaults(func=cmd_checkpoint_resume)
+    p_cp_create = cp_sub.add_parser("create", help="创建 checkpoint")
+    p_cp_create.add_argument("task", help="任务描述")
+    p_cp_create.add_argument("--steps", type=json.loads, default=[], help="JSON 步骤列表")
+    p_cp_create.set_defaults(func=cmd_checkpoint_create)
+
+    p_skill = sub.add_parser("skill", help="Skill 管理")
+    skill_sub = p_skill.add_subparsers(dest="skill_command", required=True)
+    p_skill_list = skill_sub.add_parser("list", help="列出已安装 skill")
+    p_skill_list.set_defaults(func=cmd_skill)
+    p_skill_rec = skill_sub.add_parser("recommend", help="根据任务推荐 skill")
+    p_skill_rec.add_argument("task", help="任务描述")
+    p_skill_rec.add_argument("--top-k", type=int, default=3)
+    p_skill_rec.set_defaults(func=cmd_skill)
+    p_skill_enable = skill_sub.add_parser("enable", help="启用 skill")
+    p_skill_enable.add_argument("name", help="skill 名称")
+    p_skill_enable.set_defaults(func=cmd_skill)
+    p_skill_disable = skill_sub.add_parser("disable", help="禁用 skill")
+    p_skill_disable.add_argument("name", help="skill 名称")
+    p_skill_disable.set_defaults(func=cmd_skill)
+    p_skill_prune = skill_sub.add_parser("prune", help="列出可清理 skill")
+    p_skill_prune.add_argument("--days", type=int, default=60)
+    p_skill_prune.set_defaults(func=cmd_skill)
 
     return parser
 

@@ -24,7 +24,8 @@ WORKBUDDY_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(WORKBUDDY_DIR))
 
 from agents.registry import AgentRegistry  # noqa: E402
-from router.model_router import ModelRouter, ModelConfig  # noqa: E402
+from router.model_router import ModelConfig  # noqa: E402
+from smart_router import SmartRouter  # noqa: E402
 from tracer import Tracer  # noqa: E402
 from usage_tracker import UsageTracker  # noqa: E402
 
@@ -40,6 +41,8 @@ class WorkBuddyBrain:
         self.usage = UsageTracker()
 
     def _build_router(self):
+        from router.model_router import ModelRouter
+
         models = [
             ModelConfig(
                 id="deepseek-v4-flash",
@@ -63,7 +66,7 @@ class WorkBuddyBrain:
                 fallback_order=3,
             ),
         ]
-        return ModelRouter(models=models)
+        return SmartRouter(ModelRouter(models=models))
 
     def _load_routing_config(self) -> dict:
         with open(ROUTING_CONFIG_PATH, "r", encoding="utf-8") as f:

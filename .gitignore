@@ -29,11 +29,15 @@ mcp.json
 .skills-marketplace-version
 mcp-approvals.json
 models.json
+skills_config.json
+skill_usage.json
 63_pool_*.json
 mem.md
 skills/.neodata_token
 session_fragment_repair_done*
 memory/*_memory.md
+memory/*_self_eval.json
+checkpoints/
 *.backup.*
 
 # Runtime directories
